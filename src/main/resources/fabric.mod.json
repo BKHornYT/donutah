@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "donutah",
+  "version": "${version}",
+  "name": "DonutAH",
+  "description": "Crowdsourced Auction House market data for Donut SMP",
+  "authors": ["DonutSMP"],
+  "environment": "client",
+  "icon": "assets/donutah/icon.png",
+  "entrypoints": {
+    "client": [
+      "net.donutsmp.donutah.DonutAH"
+    ],
+    "modmenu": [
+      "net.donutsmp.donutah.ModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "donutah.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "1.21.11",
+    "cloth-config": ">=15.0.0"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "net.donutsmp.donutah.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ScreenHandlerMixin",
+    "HandledScreenAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,68 @@
+plugins {
+    id 'fabric-loom' version '1.14-SNAPSHOT'
+    id 'maven-publish'
+}
+
+version = '1.0.4'
+group = 'net.donutsmp'
+
+def stagingBuild    = project.hasProperty('staging')
+def stagingDevBuild = project.hasProperty('stagingDev')
+def devBuild        = project.hasProperty('dev') || stagingDevBuild
+base { archivesName = stagingDevBuild ? 'donutah-staging-dev' : stagingBuild ? 'donutah-staging' : devBuild ? 'donutah-dev' : 'donutah' }
+
+repositories {
+    maven { url 'https://maven.fabricmc.net/' }
+    maven { url 'https://maven.shedaniel.me/' }
+    maven { url 'https://maven.terraformersmc.com/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:1.21.11"
+    mappings "net.fabricmc:yarn:1.21.11+build.4:v2"
+    modImplementation "net.fabricmc:fabric-loader:0.18.4"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:0.141.3+1.21.11"
+    modImplementation("me.shedaniel.cloth:cloth-config-fabric:15.0.140") { exclude(group: "net.fabricmc.fabric-api") }
+    modImplementation("com.terraformersmc:modmenu:11.0.3") { exclude(group: "net.fabricmc.fabric-api") }
+}
+
+// Generate BuildConstants.java with DEV flag baked in at compile time
+def generateBuildConstants = tasks.register('generateBuildConstants') {
+    def outputDir = file("${buildDir}/generated/sources/buildconst/main/java")
+    outputs.dir outputDir
+    doLast {
+        def pkg = new File(outputDir, "net/donutsmp/donutah")
+        pkg.mkdirs()
+        new File(pkg, "BuildConstants.java").text = """\
+package net.donutsmp.donutah;
+public final class BuildConstants {
+    public static final boolean DEV     = ${devBuild};
+    public static final boolean STAGING = ${stagingBuild || stagingDevBuild};
+    private BuildConstants() {}
+}
+"""
+    }
+}
+sourceSets.main.java.srcDir "${buildDir}/generated/sources/buildconst/main/java"
+compileJava.dependsOn generateBuildConstants
+afterEvaluate { tasks.named('sourcesJar') { dependsOn generateBuildConstants } }
+
+processResources {
+    inputs.property "version", project.version
+    filteringCharset "UTF-8"
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${archivesName}" }
+    }
+}
