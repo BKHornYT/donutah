@@ -7,14 +7,14 @@ import net.donutsmp.donutah.DonutAH;
 import net.donutsmp.donutah.DonutAHConfig;
 import net.donutsmp.donutah.TooltipHandler;
 import net.donutsmp.donutah.network.ApiClient;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.HoverEvent;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,22 +26,22 @@ import java.util.stream.Collectors;
 public class DonutAHCommand {
 
     public static void register(CommandDispatcher<FabricClientCommandSource> dispatcher) {
-        var root = ClientCommandManager.literal("donutah")
+        var root = ClientCommands.literal("donutah")
             .executes(ctx -> { sendHelp(ctx.getSource()); return 1; })
-            .then(ClientCommandManager.literal("reload")
+            .then(ClientCommands.literal("reload")
                 .executes(ctx -> { reload(ctx.getSource()); return 1; }))
-            .then(ClientCommandManager.literal("settings")
+            .then(ClientCommands.literal("settings")
                 .executes(ctx -> { openSettings(); return 1; }))
-            .then(ClientCommandManager.literal("top")
+            .then(ClientCommands.literal("top")
                 .executes(ctx -> { lookupTop(ctx.getSource()); return 1; }))
-            .then(ClientCommandManager.argument("itemname", StringArgumentType.greedyString())
+            .then(ClientCommands.argument("itemname", StringArgumentType.greedyString())
                 .executes(ctx -> {
                     lookupItem(ctx.getSource(), StringArgumentType.getString(ctx, "itemname"));
                     return 1;
                 }));
 
         if (BuildConstants.STAGING) {
-            root.then(ClientCommandManager.literal("break")
+            root.then(ClientCommands.literal("break")
                 .executes(ctx -> { runBreakTest(ctx.getSource()); return 1; }));
         }
 
@@ -49,17 +49,17 @@ public class DonutAHCommand {
     }
 
     private static void openSettings() {
-        MinecraftClient.getInstance().execute(() ->
-            MinecraftClient.getInstance().setScreen(
-                DonutAHConfig.createScreen(MinecraftClient.getInstance().currentScreen)));
+        Minecraft.getInstance().execute(() ->
+            Minecraft.getInstance().setScreen(
+                DonutAHConfig.createScreen(Minecraft.getInstance().screen)));
     }
 
     private static void reload(FabricClientCommandSource source) {
         if (!DonutAH.onTargetServer) {
-            source.sendFeedback(Text.literal("§c✗ §7DonutAH only works on DonutSMP."));
+            source.sendFeedback(Component.literal("§c✗ §7DonutAH only works on DonutSMP."));
             return;
         }
-        source.sendFeedback(Text.literal("§8[§b⬡§8] §7Reloading…"));
+        source.sendFeedback(Component.literal("§8[§b⬡§8] §7Reloading…"));
         DonutAH.listingCache.clear();
         TooltipHandler.clearCache();
         Thread.ofVirtual().start(() -> {
@@ -86,8 +86,8 @@ public class DonutAHCommand {
             DonutAH.mutedGuis.clear();
             DonutAH.mutedGuis.addAll(mg);
             TooltipHandler.clearCache();
-            MinecraftClient.getInstance().execute(() ->
-                source.sendFeedback(Text.literal(
+            Minecraft.getInstance().execute(() ->
+                source.sendFeedback(Component.literal(
                     "§8[§b⬡§8] §aDone§7 — §f" + latest.size() +
                     " §7listings, §f" + bl.size() + " §7blacklisted, §f" + mu.size() + " §7muted, §f" + labels.size() + " §7labels, §f" + sp.size() + " §7shop prices, §f" + mg.size() + " §7muted GUIs, tooltip cache cleared.")));
         });
@@ -95,10 +95,10 @@ public class DonutAHCommand {
 
     private static void lookupItem(FabricClientCommandSource source, String input) {
         if (!DonutAH.onTargetServer) {
-            source.sendFeedback(Text.literal("§c✗ §7DonutAH only works on DonutSMP."));
+            source.sendFeedback(Component.literal("§c✗ §7DonutAH only works on DonutSMP."));
             return;
         }
-        source.sendFeedback(Text.literal("§8[§b⬡§8] §7Fetching §f" + input + "§7..."));
+        source.sendFeedback(Component.literal("§8[§b⬡§8] §7Fetching §f" + input + "§7..."));
 
         Thread.ofVirtual().start(() -> {
             String[] words = input.trim().split("\\s+");
@@ -131,23 +131,23 @@ public class DonutAHCommand {
                 final String fi = input;
                 final boolean isConnFail = connectionFailed;
                 final List<String> suggestions = isConnFail ? new ArrayList<>() : getSuggestions(input);
-                MinecraftClient.getInstance().execute(() -> {
+                Minecraft.getInstance().execute(() -> {
                     if (isConnFail) {
-                        source.sendFeedback(Text.literal(
+                        source.sendFeedback(Component.literal(
                             "§8[§b⬡§8] §eConnection issue§7 — couldn't reach the server. Try again."));
                     } else if (!suggestions.isEmpty()) {
-                        MutableText msg = Text.literal("§8[§b⬡§8] §cNo data for §f\"" + fi + "\"§c. Did you mean: ");
+                        MutableComponent msg = Component.literal("§8[§b⬡§8] §cNo data for §f\"" + fi + "\"§c. Did you mean: ");
                         for (int i = 0; i < suggestions.size(); i++) {
-                            if (i > 0) msg.append(Text.literal("§7, "));
+                            if (i > 0) msg.append(Component.literal("§7, "));
                             String sug = suggestions.get(i);
-                            msg.append(Text.literal("§e" + sug).setStyle(Style.EMPTY
+                            msg.append(Component.literal("§e" + sug).setStyle(Style.EMPTY
                                 .withClickEvent(new ClickEvent.RunCommand("/donutah " + sug))
-                                .withHoverEvent(new HoverEvent.ShowText(Text.literal("§7Click to look up §f" + sug)))));
+                                .withHoverEvent(new HoverEvent.ShowText(Component.literal("§7Click to look up §f" + sug)))));
                         }
-                        msg.append(Text.literal("§7?"));
+                        msg.append(Component.literal("§7?"));
                         source.sendFeedback(msg);
                     } else {
-                        source.sendFeedback(Text.literal(
+                        source.sendFeedback(Component.literal(
                             "§8[§b⬡§8] §cNo data for §f\"" + fi + "\"§c. Check the spelling."));
                     }
                 });
@@ -165,20 +165,20 @@ public class DonutAHCommand {
                 } else {
                     final String fn = enchantFilter, fin = itemName, orig = input;
                     final List<String> suggestions = getSuggestions(orig);
-                    MinecraftClient.getInstance().execute(() -> {
+                    Minecraft.getInstance().execute(() -> {
                         if (!suggestions.isEmpty()) {
-                            MutableText msg = Text.literal("§8[§b⬡§8] §cNo variant of §f\"" + fin + "\"§c matches §f\"" + fn + "\"§c. Did you mean: ");
+                            MutableComponent msg = Component.literal("§8[§b⬡§8] §cNo variant of §f\"" + fin + "\"§c matches §f\"" + fn + "\"§c. Did you mean: ");
                             for (int i = 0; i < suggestions.size(); i++) {
-                                if (i > 0) msg.append(Text.literal("§7, "));
+                                if (i > 0) msg.append(Component.literal("§7, "));
                                 String sug = suggestions.get(i);
-                                msg.append(Text.literal("§e" + sug).setStyle(Style.EMPTY
+                                msg.append(Component.literal("§e" + sug).setStyle(Style.EMPTY
                                     .withClickEvent(new ClickEvent.RunCommand("/donutah " + sug))
-                                    .withHoverEvent(new HoverEvent.ShowText(Text.literal("§7Click to look up §f" + sug)))));
+                                    .withHoverEvent(new HoverEvent.ShowText(Component.literal("§7Click to look up §f" + sug)))));
                             }
-                            msg.append(Text.literal("§7?"));
+                            msg.append(Component.literal("§7?"));
                             source.sendFeedback(msg);
                         } else {
-                            source.sendFeedback(Text.literal(
+                            source.sendFeedback(Component.literal(
                                 "§8[§b⬡§8] §cNo variant of §f\"" + fin + "\"§c matches §f\"" + fn + "\"§c."));
                         }
                     });
@@ -197,8 +197,8 @@ public class DonutAHCommand {
                     if (enchantedCount > 0) {
                         final long ec = enchantedCount;
                         final String fin = itemName;
-                        MinecraftClient.getInstance().execute(() ->
-                            source.sendFeedback(Text.literal(
+                        Minecraft.getInstance().execute(() ->
+                            source.sendFeedback(Component.literal(
                                 "§8[§b⬡§8] §7" + ec + " enchanted variant" + (ec == 1 ? "" : "s") +
                                 " — try §f/donutah " + fin + " §e<enchants>§7 to search")));
                     }
@@ -209,7 +209,7 @@ public class DonutAHCommand {
             final List<ApiClient.VariantResponse> finalVariants = variants;
             final String finalItemName = itemName;
             String msg = buildMessage(finalItemName, finalVariants);
-            MinecraftClient.getInstance().execute(() -> source.sendFeedback(Text.literal(msg)));
+            Minecraft.getInstance().execute(() -> source.sendFeedback(Component.literal(msg)));
         });
     }
 
@@ -352,16 +352,16 @@ public class DonutAHCommand {
 
     private static void lookupTop(FabricClientCommandSource source) {
         if (!DonutAH.onTargetServer) {
-            source.sendFeedback(Text.literal("§c✗ §7DonutAH only works on DonutSMP."));
+            source.sendFeedback(Component.literal("§c✗ §7DonutAH only works on DonutSMP."));
             return;
         }
-        source.sendFeedback(Text.literal("§8[§b⬡§8] §7Fetching top flip opportunities..."));
+        source.sendFeedback(Component.literal("§8[§b⬡§8] §7Fetching top flip opportunities..."));
         Thread.ofVirtual().start(() -> {
             List<ApiClient.TopItem> items = ApiClient.fetchTop(10);
             String sep = "§8§m                          §r";
             if (items.isEmpty()) {
-                MinecraftClient.getInstance().execute(() ->
-                    source.sendFeedback(Text.literal("§8[§b⬡§8] §cNo flip data yet — more scans needed.")));
+                Minecraft.getInstance().execute(() ->
+                    source.sendFeedback(Component.literal("§8[§b⬡§8] §cNo flip data yet — more scans needed.")));
                 return;
             }
             StringBuilder sb = new StringBuilder();
@@ -377,7 +377,7 @@ public class DonutAHCommand {
             }
             sb.append(sep);
             final String msg = sb.toString();
-            MinecraftClient.getInstance().execute(() -> source.sendFeedback(Text.literal(msg)));
+            Minecraft.getInstance().execute(() -> source.sendFeedback(Component.literal(msg)));
         });
     }
 
@@ -401,13 +401,13 @@ public class DonutAHCommand {
         } else {
             help.append("§8  └ §f/donutah settings §8— §7open settings screen");
         }
-        source.sendFeedback(Text.literal(help.toString()));
+        source.sendFeedback(Component.literal(help.toString()));
     }
 
     private static void runBreakTest(FabricClientCommandSource source) {
         String sep = "§b§m                              §r";
-        source.sendFeedback(Text.literal("\n" + sep + "\n §b§l⬡ §f§lDonutAH Staging Break Test\n" + sep));
-        source.sendFeedback(Text.literal(" §7Running auto checks..."));
+        source.sendFeedback(Component.literal("\n" + sep + "\n §b§l⬡ §f§lDonutAH Staging Break Test\n" + sep));
+        source.sendFeedback(Component.literal(" §7Running auto checks..."));
 
         Thread.ofVirtual().start(() -> {
             String localBase = ApiClient.STAGING_LOCAL_BASE;
@@ -435,10 +435,10 @@ public class DonutAHCommand {
             final boolean fHome = homeOk, fVps = vpsOk, fLatest = latestOk, fDash = dashOk, fStatic = staticOk, fTop = topOk;
             final int fCount = latestCount, fSCount = staticCount;
 
-            MinecraftClient.getInstance().execute(() -> {
+            Minecraft.getInstance().execute(() -> {
                 String ok  = "§a✓";
                 String err = "§c✗";
-                source.sendFeedback(Text.literal(
+                source.sendFeedback(Component.literal(
                     " §7Auto checks:\n" +
                     " §8┌ §fHome staging       " + (fHome   ? ok + " §7(YOUR_LAN_IP:3002)" : err + " §cUNREACHABLE") + "\n" +
                     " §8│ §fVPS staging        " + (fVps    ? ok + " §7(YOUR_VPS_IP:3003)"   : err + " §cUNREACHABLE") + "\n" +
@@ -447,7 +447,7 @@ public class DonutAHCommand {
                     " §8│ §f/api/static-prices " + (fStatic ? ok + " §7(" + fSCount + " entries)" : err + " §cFAILED") + "\n" +
                     " §8└ §f/api/top           " + (fTop    ? ok                               : err + " §cFAILED")
                 ));
-                source.sendFeedback(Text.literal(
+                source.sendFeedback(Component.literal(
                     "\n §7Manual §8(full list in §bTESTING.md§8):\n" +
                     " §8[§f1§8] §eAH scan §7— open AH page 1, lowest price → scan fires\n" +
                     " §8[§f2§8] §eItem tooltip §7— hover item → price shows\n" +

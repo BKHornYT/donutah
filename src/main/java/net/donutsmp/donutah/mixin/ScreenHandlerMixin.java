@@ -3,31 +3,31 @@ package net.donutsmp.donutah.mixin;
 import net.donutsmp.donutah.AHScraper;
 import net.donutsmp.donutah.BuildConstants;
 import net.donutsmp.donutah.DonutAH;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.screen.GenericContainerScreenHandler;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(HandledScreen.class)
+@Mixin(AbstractContainerScreen.class)
 public abstract class ScreenHandlerMixin extends Screen {
 
-    @Shadow public abstract ScreenHandler getScreenHandler();
+    @Shadow public abstract AbstractContainerMenu getMenu();
 
-    protected ScreenHandlerMixin(Text title) { super(title); }
+    protected ScreenHandlerMixin(Component title) { super(title); }
 
     @Inject(method = "init", at = @At("RETURN"))
     private void onScreenInit(CallbackInfo ci) {
         if (!DonutAH.onTargetServer) return;
-        ScreenHandler handler = getScreenHandler();
-        if (!(handler instanceof GenericContainerScreenHandler containerHandler)) return;
-        if (containerHandler.getRows() != 6) return;
+        AbstractContainerMenu handler = getMenu();
+        if (!(handler instanceof ChestMenu containerHandler)) return;
+        if (containerHandler.getRowCount() != 6) return;
 
         // Only scan page 1 — skip page 2, 3, etc.
         String titleLower = this.getTitle().getString().toLowerCase();
@@ -41,14 +41,14 @@ public abstract class ScreenHandlerMixin extends Screen {
 
         // Poll every 500ms until slots have data (up to 10s)
         Thread.ofVirtual().start(() -> {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             boolean dataSeenLastPoll = false;
             for (int attempt = 0; attempt < 20; attempt++) {
                 try { Thread.sleep(500); } catch (InterruptedException e) { return; }
-                if (client.currentScreen == null) return;
+                if (client.screen == null) return;
                 boolean hasData = false;
                 for (int s = 0; s < 54; s++) {
-                    if (!containerHandler.getSlot(s).getStack().isEmpty()) { hasData = true; break; }
+                    if (!containerHandler.getSlot(s).getItem().isEmpty()) { hasData = true; break; }
                 }
                 if (hasData && dataSeenLastPoll) {
                     // Data was present for 2 consecutive polls — all slot packets should be loaded

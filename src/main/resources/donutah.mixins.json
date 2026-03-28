@@ -1,7 +1,7 @@
 {
   "required": true,
   "package": "net.donutsmp.donutah.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "client": [
     "ScreenHandlerMixin",
     "HandledScreenAccessor"

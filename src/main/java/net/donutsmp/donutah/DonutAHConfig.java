@@ -5,9 +5,9 @@ import com.google.gson.GsonBuilder;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.screens.Screen;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.network.chat.Component;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.*;
@@ -27,15 +27,15 @@ public class DonutAHConfig {
     public static boolean showShulkerValue  = true;
     public static boolean compactNumbers    = true;
     public static boolean tooltipSpacer    = true;
-    public static InputUtil.Key inventoryValueKey = InputUtil.fromTranslationKey("key.keyboard.v");
+    public static InputConstants.Key inventoryValueKey = InputConstants.getKey("key.keyboard.v");
 
     // ── Dev settings (only active in BuildConstants.DEV builds) ──────────
     public static boolean     devShowRawName      = true;
     public static ForceServer devForceServer      = ForceServer.AUTO;
     public static int         devSyncIntervalMin  = 3;
     public static boolean     devShowLabels       = true;
-    public static InputUtil.Key devMuteKey  = InputUtil.fromTranslationKey("key.keyboard.b");
-    public static InputUtil.Key devLabelKey = InputUtil.fromTranslationKey("key.keyboard.l");
+    public static InputConstants.Key devMuteKey  = InputConstants.getKey("key.keyboard.b");
+    public static InputConstants.Key devLabelKey = InputConstants.getKey("key.keyboard.l");
     public static String[] devLabelPresets = {
         "In my shop",
         "§6Shop: $",
@@ -118,7 +118,7 @@ public class DonutAHConfig {
                 if (d.showTrend        != null) showTrend        = d.showTrend;
                 if (d.showVolume       != null) showVolume       = d.showVolume;
                 if (d.showShulkerValue != null) showShulkerValue = d.showShulkerValue;
-                if (d.inventoryValueKey != null) { try { inventoryValueKey = InputUtil.fromTranslationKey(d.inventoryValueKey); } catch (Exception ignored) {} }
+                if (d.inventoryValueKey != null) { try { inventoryValueKey = InputConstants.getKey(d.inventoryValueKey); } catch (Exception ignored) {} }
                 if (d.compactNumbers   != null) compactNumbers   = d.compactNumbers;
                 if (d.tooltipSpacer    != null) tooltipSpacer    = d.tooltipSpacer;
                 if (d.cmdShowRange     != null) cmdShowRange     = d.cmdShowRange;
@@ -129,8 +129,8 @@ public class DonutAHConfig {
                 if (d.devShowLabels      != null) devShowLabels      = d.devShowLabels;
                 if (d.devForceServer     != null) { try { devForceServer = ForceServer.valueOf(d.devForceServer); } catch (Exception ignored) {} }
                 if (d.devSyncIntervalMin != null) devSyncIntervalMin = Math.max(1, Math.min(10, d.devSyncIntervalMin));
-                if (d.devMuteKey  != null) { try { devMuteKey  = InputUtil.fromTranslationKey(d.devMuteKey);  } catch (Exception ignored) {} }
-                if (d.devLabelKey != null) { try { devLabelKey = InputUtil.fromTranslationKey(d.devLabelKey); } catch (Exception ignored) {} }
+                if (d.devMuteKey  != null) { try { devMuteKey  = InputConstants.getKey(d.devMuteKey);  } catch (Exception ignored) {} }
+                if (d.devLabelKey != null) { try { devLabelKey = InputConstants.getKey(d.devLabelKey); } catch (Exception ignored) {} }
                 if (d.devLabelPresets != null) {
                     for (int i = 0; i < Math.min(d.devLabelPresets.length, devLabelPresets.length); i++)
                         devLabelPresets[i] = d.devLabelPresets[i] != null ? d.devLabelPresets[i] : "";
@@ -154,7 +154,7 @@ public class DonutAHConfig {
             d.showShulkerValue = showShulkerValue;
             d.compactNumbers   = compactNumbers;
             d.tooltipSpacer    = tooltipSpacer;
-            d.inventoryValueKey = inventoryValueKey.getTranslationKey();
+            d.inventoryValueKey = inventoryValueKey.getName();
             d.cmdShowRange     = cmdShowRange;
             d.cmdShowWeeklyAvg = cmdShowWeeklyAvg;
             d.cmdShowTrend     = cmdShowTrend;
@@ -163,8 +163,8 @@ public class DonutAHConfig {
             d.devShowLabels      = devShowLabels;
             d.devForceServer     = devForceServer.name();
             d.devSyncIntervalMin = devSyncIntervalMin;
-            d.devMuteKey         = devMuteKey.getTranslationKey();
-            d.devLabelKey        = devLabelKey.getTranslationKey();
+            d.devMuteKey         = devMuteKey.getName();
+            d.devLabelKey        = devLabelKey.getName();
             d.devLabelPresets    = devLabelPresets.clone();
             File f = configPath().toFile();
             try (Writer w = new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8)) {
@@ -192,155 +192,155 @@ public class DonutAHConfig {
     public static Screen createScreen(Screen parent) {
         ConfigBuilder builder = ConfigBuilder.create()
                 .setParentScreen(parent)
-                .setTitle(Text.literal("§b§lDonutAH §r§7Settings"))
+                .setTitle(Component.literal("§b§lDonutAH §r§7Settings"))
                 .setSavingRunnable(DonutAHConfig::save);
 
         ConfigEntryBuilder eb = builder.entryBuilder();
 
         // ── Tooltip category ──────────────────────────────────────────
-        ConfigCategory tooltip = builder.getOrCreateCategory(Text.literal("Tooltip"));
+        ConfigCategory tooltip = builder.getOrCreateCategory(Component.literal("Tooltip"));
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Enable Price Tooltip"), tooltipEnabled)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Enable Price Tooltip"), tooltipEnabled)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Show DonutAH price info when hovering over items."))
+                .setTooltip(Component.literal("Show DonutAH price info when hovering over items."))
                 .setSaveConsumer(v -> tooltipEnabled = v)
                 .build());
 
-        tooltip.addEntry(eb.startStrField(Text.literal("Prefix Text"), prefix)
+        tooltip.addEntry(eb.startStrField(Component.literal("Prefix Text"), prefix)
                 .setDefaultValue("DonutAH")
-                .setTooltip(Text.literal("Text shown in [brackets] on tooltip lines. Default: DonutAH"))
+                .setTooltip(Component.literal("Text shown in [brackets] on tooltip lines. Default: DonutAH"))
                 .setSaveConsumer(v -> prefix = v.isBlank() ? "DonutAH" : v)
                 .build());
 
-        tooltip.addEntry(eb.startEnumSelector(Text.literal("Price Color"), PriceColor.class, priceColor)
+        tooltip.addEntry(eb.startEnumSelector(Component.literal("Price Color"), PriceColor.class, priceColor)
                 .setDefaultValue(PriceColor.GREEN)
-                .setTooltip(Text.literal("Color used to display prices in tooltips."))
-                .setEnumNameProvider(e -> Text.literal(((PriceColor) e).getDisplayName()))
+                .setTooltip(Component.literal("Color used to display prices in tooltips."))
+                .setEnumNameProvider(e -> Component.literal(((PriceColor) e).getDisplayName()))
                 .setSaveConsumer(v -> priceColor = v)
                 .build());
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Show Stack Value"), showStackValue)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Show Stack Value"), showStackValue)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("When holding a stack of 2+ items, show the total stack value below the per-unit price."))
+                .setTooltip(Component.literal("When holding a stack of 2+ items, show the total stack value below the per-unit price."))
                 .setSaveConsumer(v -> showStackValue = v)
                 .build());
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Show Min/Max Range"), showMinMax)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Show Min/Max Range"), showMinMax)
                 .setDefaultValue(false)
-                .setTooltip(Text.literal("Also show the 24h low and high price in the tooltip."))
+                .setTooltip(Component.literal("Also show the 24h low and high price in the tooltip."))
                 .setSaveConsumer(v -> showMinMax = v)
                 .build());
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Show Shulker Contents Value"), showShulkerValue)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Show Shulker Contents Value"), showShulkerValue)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Show the estimated total market value of items inside a shulker box."))
+                .setTooltip(Component.literal("Show the estimated total market value of items inside a shulker box."))
                 .setSaveConsumer(v -> showShulkerValue = v)
                 .build());
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Show Price Trend"), showTrend)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Show Price Trend"), showTrend)
                 .setDefaultValue(false)
-                .setTooltip(Text.literal("Show a price trend arrow (▲/▼) and % change in the item tooltip."))
+                .setTooltip(Component.literal("Show a price trend arrow (▲/▼) and % change in the item tooltip."))
                 .setSaveConsumer(v -> showTrend = v)
                 .build());
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Show Daily Volume"), showVolume)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Show Daily Volume"), showVolume)
                 .setDefaultValue(false)
-                .setTooltip(Text.literal("Show how many times this item was scanned today in the tooltip."))
+                .setTooltip(Component.literal("Show how many times this item was scanned today in the tooltip."))
                 .setSaveConsumer(v -> showVolume = v)
                 .build());
 
-        tooltip.addEntry(eb.startKeyCodeField(Text.literal("Inventory Value Key"), inventoryValueKey)
-                .setDefaultValue(InputUtil.fromTranslationKey("key.keyboard.v"))
-                .setTooltip(Text.literal("Press this key while in your inventory to calculate the total market value of all items."))
+        tooltip.addEntry(eb.startKeyCodeField(Component.literal("Inventory Value Key"), inventoryValueKey)
+                .setDefaultValue(InputConstants.getKey("key.keyboard.v"))
+                .setTooltip(Component.literal("Press this key while in your inventory to calculate the total market value of all items."))
                 .setKeySaveConsumer(v -> inventoryValueKey = v)
                 .build());
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Blank Line Before Tooltip"), tooltipSpacer)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Blank Line Before Tooltip"), tooltipSpacer)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Add an empty line between item stats and DonutAH price info."))
+                .setTooltip(Component.literal("Add an empty line between item stats and DonutAH price info."))
                 .setSaveConsumer(v -> tooltipSpacer = v)
                 .build());
 
-        tooltip.addEntry(eb.startBooleanToggle(Text.literal("Compact Numbers (K/M/B)"), compactNumbers)
+        tooltip.addEntry(eb.startBooleanToggle(Component.literal("Compact Numbers (K/M/B)"), compactNumbers)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Display prices as 1.5K, 2.3M etc. instead of full numbers."))
+                .setTooltip(Component.literal("Display prices as 1.5K, 2.3M etc. instead of full numbers."))
                 .setSaveConsumer(v -> compactNumbers = v)
                 .build());
 
         // ── Command category ──────────────────────────────────────────
-        ConfigCategory command = builder.getOrCreateCategory(Text.literal("Command"));
+        ConfigCategory command = builder.getOrCreateCategory(Component.literal("Command"));
 
-        command.addEntry(eb.startBooleanToggle(Text.literal("Show 24h Range (min → max)"), cmdShowRange)
+        command.addEntry(eb.startBooleanToggle(Component.literal("Show 24h Range (min → max)"), cmdShowRange)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Show the 24h low/high price range in /donutah output."))
+                .setTooltip(Component.literal("Show the 24h low/high price range in /donutah output."))
                 .setSaveConsumer(v -> cmdShowRange = v)
                 .build());
 
-        command.addEntry(eb.startBooleanToggle(Text.literal("Show 7-Day Average"), cmdShowWeeklyAvg)
+        command.addEntry(eb.startBooleanToggle(Component.literal("Show 7-Day Average"), cmdShowWeeklyAvg)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Show the 7-day average price in /donutah output."))
+                .setTooltip(Component.literal("Show the 7-day average price in /donutah output."))
                 .setSaveConsumer(v -> cmdShowWeeklyAvg = v)
                 .build());
 
-        command.addEntry(eb.startBooleanToggle(Text.literal("Show Price Trend"), cmdShowTrend)
+        command.addEntry(eb.startBooleanToggle(Component.literal("Show Price Trend"), cmdShowTrend)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Show the price trend (▲/▼ vs yesterday) in /donutah output."))
+                .setTooltip(Component.literal("Show the price trend (▲/▼ vs yesterday) in /donutah output."))
                 .setSaveConsumer(v -> cmdShowTrend = v)
                 .build());
 
-        command.addEntry(eb.startBooleanToggle(Text.literal("Show Volume"), cmdShowVolume)
+        command.addEntry(eb.startBooleanToggle(Component.literal("Show Volume"), cmdShowVolume)
                 .setDefaultValue(true)
-                .setTooltip(Text.literal("Show daily/weekly volume in /donutah output."))
+                .setTooltip(Component.literal("Show daily/weekly volume in /donutah output."))
                 .setSaveConsumer(v -> cmdShowVolume = v)
                 .build());
 
         // ── Dev category (only shown in dev builds) ───────────────────
         if (BuildConstants.DEV) {
-            ConfigCategory dev = builder.getOrCreateCategory(Text.literal("§c[Dev]"));
+            ConfigCategory dev = builder.getOrCreateCategory(Component.literal("§c[Dev]"));
 
-            dev.addEntry(eb.startBooleanToggle(Text.literal("Show Raw Item Name"), devShowRawName)
+            dev.addEntry(eb.startBooleanToggle(Component.literal("Show Raw Item Name"), devShowRawName)
                     .setDefaultValue(true)
-                    .setTooltip(Text.literal("Show the exact internal item name string in tooltips. Useful for finding names to blacklist."))
+                    .setTooltip(Component.literal("Show the exact internal item name string in tooltips. Useful for finding names to blacklist."))
                     .setSaveConsumer(v -> devShowRawName = v)
                     .build());
 
-            dev.addEntry(eb.startKeyCodeField(Text.literal("Mute Item Key"), devMuteKey)
-                    .setDefaultValue(InputUtil.fromTranslationKey("key.keyboard.b"))
-                    .setTooltip(Text.literal("While hovering an item, press this key to toggle mute (hide its tooltip price)."))
+            dev.addEntry(eb.startKeyCodeField(Component.literal("Mute Item Key"), devMuteKey)
+                    .setDefaultValue(InputConstants.getKey("key.keyboard.b"))
+                    .setTooltip(Component.literal("While hovering an item, press this key to toggle mute (hide its tooltip price)."))
                     .setKeySaveConsumer(v -> devMuteKey = v)
                     .build());
 
-            dev.addEntry(eb.startKeyCodeField(Text.literal("Label Item Key"), devLabelKey)
-                    .setDefaultValue(InputUtil.fromTranslationKey("key.keyboard.l"))
-                    .setTooltip(Text.literal("While hovering an item, press this key to open the label editor."))
+            dev.addEntry(eb.startKeyCodeField(Component.literal("Label Item Key"), devLabelKey)
+                    .setDefaultValue(InputConstants.getKey("key.keyboard.l"))
+                    .setTooltip(Component.literal("While hovering an item, press this key to open the label editor."))
                     .setKeySaveConsumer(v -> devLabelKey = v)
                     .build());
 
-            dev.addEntry(eb.startEnumSelector(Text.literal("Force Server"), ForceServer.class, devForceServer)
+            dev.addEntry(eb.startEnumSelector(Component.literal("Force Server"), ForceServer.class, devForceServer)
                     .setDefaultValue(ForceServer.AUTO)
-                    .setTooltip(Text.literal("Override automatic server selection. Use Auto unless debugging a specific server."))
-                    .setEnumNameProvider(e -> Text.literal(((ForceServer) e).getDisplayName()))
+                    .setTooltip(Component.literal("Override automatic server selection. Use Auto unless debugging a specific server."))
+                    .setEnumNameProvider(e -> Component.literal(((ForceServer) e).getDisplayName()))
                     .setSaveConsumer(v -> devForceServer = v)
                     .build());
 
-            dev.addEntry(eb.startIntSlider(Text.literal("Cache Re-sync Interval (min)"), devSyncIntervalMin, 1, 10)
+            dev.addEntry(eb.startIntSlider(Component.literal("Cache Re-sync Interval (min)"), devSyncIntervalMin, 1, 10)
                     .setDefaultValue(3)
-                    .setTooltip(Text.literal("How often (in minutes) to re-fetch the listing cache and re-select the best server. Default: 3."))
+                    .setTooltip(Component.literal("How often (in minutes) to re-fetch the listing cache and re-select the best server. Default: 3."))
                     .setSaveConsumer(v -> devSyncIntervalMin = v)
                     .build());
 
             for (int i = 0; i < devLabelPresets.length; i++) {
                 final int idx = i;
-                dev.addEntry(eb.startStrField(Text.literal("Label Preset " + (i + 1)), devLabelPresets[i])
+                dev.addEntry(eb.startStrField(Component.literal("Label Preset " + (i + 1)), devLabelPresets[i])
                         .setDefaultValue(i == 0 ? "In my shop" : "")
-                        .setTooltip(Text.literal("Quick-fill preset for the label screen. Supports color codes (e.g. §aGreen, §cRed). Leave empty to hide."))
+                        .setTooltip(Component.literal("Quick-fill preset for the label screen. Supports color codes (e.g. §aGreen, §cRed). Leave empty to hide."))
                         .setSaveConsumer(v -> devLabelPresets[idx] = v)
                         .build());
             }
 
-            dev.addEntry(eb.startBooleanToggle(Text.literal("Show Item Labels in Tooltip"), devShowLabels)
+            dev.addEntry(eb.startBooleanToggle(Component.literal("Show Item Labels in Tooltip"), devShowLabels)
                     .setDefaultValue(true)
-                    .setTooltip(Text.literal("Show custom labels (set via /donutah label) below item prices in tooltips."))
+                    .setTooltip(Component.literal("Show custom labels (set via /donutah label) below item prices in tooltips."))
                     .setSaveConsumer(v -> devShowLabels = v)
                     .build());
         }

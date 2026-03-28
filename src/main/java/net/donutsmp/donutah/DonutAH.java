@@ -7,10 +7,10 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,16 +72,16 @@ public class DonutAH implements ClientModInitializer {
         // Inventory value key — all builds
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.getWindow() == null || client.player == null) return;
-            if (!onTargetServer || client.currentScreen == null) return;
-            boolean vDown = InputUtil.isKeyPressed(
-                client.getWindow(), DonutAHConfig.inventoryValueKey.getCode());
+            if (!onTargetServer || client.screen == null) return;
+            boolean vDown = InputConstants.isKeyDown(
+                client.getWindow(),DonutAHConfig.inventoryValueKey.getValue());
             if (vDown && !invKeyWasDown) {
                 double total = 0;
                 int counted = 0;
-                for (int i = 0; i < client.player.getInventory().size(); i++) {
-                    net.minecraft.item.ItemStack stack = client.player.getInventory().getStack(i);
+                for (int i = 0; i < client.player.getInventory().getContainerSize(); i++) {
+                    net.minecraft.world.item.ItemStack stack = client.player.getInventory().getItem(i);
                     if (stack.isEmpty()) continue;
-                    String name = stack.getName().getString();
+                    String name = stack.getHoverName().getString();
                     java.util.List<String> enchants = net.donutsmp.donutah.AHScraper.getStackEnchantments(stack);
                     java.util.Collections.sort(enchants);
                     String key = name.toLowerCase() + "|" + String.join(",", enchants);
@@ -101,9 +101,9 @@ public class DonutAH implements ClientModInitializer {
                 }
                 final double fTotal = total;
                 final int fCounted = counted;
-                client.execute(() -> client.player.sendMessage(
-                    Text.literal("§8[§b⬡§8] §7Inventory value: §a$" + TooltipHandler.formatPrice(fTotal) +
-                        " §8(§f" + fCounted + " §7item types priced§8)"), false));
+                client.execute(() -> client.player.sendSystemMessage(
+                    Component.literal("§8[§b⬡§8] §7Inventory value: §a$" + TooltipHandler.formatPrice(fTotal) +
+                        " §8(§f" + fCounted + " §7item types priced§8)")));
             }
             invKeyWasDown = vDown;
         });
@@ -113,8 +113,8 @@ public class DonutAH implements ClientModInitializer {
                 if (client.getWindow() == null) return;
 
                 // Mute key — toggle mute while hovering item
-                boolean bDown = InputUtil.isKeyPressed(
-                    client.getWindow(), DonutAHConfig.devMuteKey.getCode());
+                boolean bDown = InputConstants.isKeyDown(
+                    client.getWindow(),DonutAHConfig.devMuteKey.getValue());
                 if (bDown && !muteKeyWasDown && onTargetServer) {
                     String name = TooltipHandler.lastHoveredItemName;
                     if (name != null && !name.isEmpty()) {
@@ -128,8 +128,8 @@ public class DonutAH implements ClientModInitializer {
                                 TooltipHandler.clearCache();
                                 if (client.player != null) {
                                     String status = ok ? "§eUnmuted" : "§cFailed to save (unmuted locally)";
-                                    client.execute(() -> client.player.sendMessage(
-                                        Text.literal("§8[§b⬡§8] " + status + "§7: §f\"" + nameFinal + "\""), false));
+                                    client.execute(() -> client.player.sendSystemMessage(
+                                        Component.literal("§8[§b⬡§8] " + status + "§7: §f\"" + nameFinal + "\"")));
                                 }
                             } else {
                                 boolean ok = ApiClient.muteItem(nameFinal);
@@ -138,8 +138,8 @@ public class DonutAH implements ClientModInitializer {
                                 TooltipHandler.clearCache();
                                 if (client.player != null) {
                                     String status = ok ? "§aMuted" : "§cFailed to save (muted locally)";
-                                    client.execute(() -> client.player.sendMessage(
-                                        Text.literal("§8[§b⬡§8] " + status + "§7: §f\"" + nameFinal + "\""), false));
+                                    client.execute(() -> client.player.sendSystemMessage(
+                                        Component.literal("§8[§b⬡§8] " + status + "§7: §f\"" + nameFinal + "\"")));
                                 }
                             }
                         });
@@ -148,9 +148,9 @@ public class DonutAH implements ClientModInitializer {
                 muteKeyWasDown = bDown;
 
                 // Label key — open label editor while hovering item
-                boolean lDown = InputUtil.isKeyPressed(
-                    client.getWindow(), DonutAHConfig.devLabelKey.getCode());
-                if (lDown && !labelKeyWasDown && onTargetServer && client.currentScreen != null) {
+                boolean lDown = InputConstants.isKeyDown(
+                    client.getWindow(),DonutAHConfig.devLabelKey.getValue());
+                if (lDown && !labelKeyWasDown && onTargetServer && client.screen != null) {
                     String name = TooltipHandler.lastHoveredItemName;
                     if (name != null && !name.isEmpty()) {
                         String nameFinal = name;
@@ -162,9 +162,9 @@ public class DonutAH implements ClientModInitializer {
         }
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            ServerInfo info = client.getCurrentServerEntry();
+            ServerData info = client.getCurrentServer();
             if (info != null) {
-                String addr = info.address.toLowerCase();
+                String addr = info.ip.toLowerCase();
                 onTargetServer = addr.endsWith(TARGET_SERVER_SUFFIX)
                         || addr.contains(TARGET_SERVER_SUFFIX + ":");
                 LOGGER.info("[DonutAH] Connected to {}. Active: {}", addr, onTargetServer);
@@ -228,12 +228,12 @@ public class DonutAH implements ClientModInitializer {
                                 ApiClient.OnlineStats onlineStats = ApiClient.fetchOnlineStats();
                                 if (onlineStats != null && onlineStats.online > 0) {
                                     int count = onlineStats.online;
-                                    MinecraftClient mc = MinecraftClient.getInstance();
+                                    Minecraft mc = Minecraft.getInstance();
                                     mc.execute(() -> {
                                         if (mc.player != null)
-                                            mc.player.sendMessage(Text.literal(
+                                            mc.player.sendSystemMessage(Component.literal(
                                                 "§8[§b⬡§8] §7" + count + " DonutSMP player" +
-                                                (count == 1 ? "" : "s") + " online with DonutAH"), false);
+                                                (count == 1 ? "" : "s") + " online with DonutAH"));
                                     });
                                 }
                             }
@@ -246,7 +246,7 @@ public class DonutAH implements ClientModInitializer {
                     });
 
                     {
-                        final String uuid     = client.player != null ? client.player.getUuidAsString() : null;
+                        final String uuid     = client.player != null ? client.player.getStringUUID() : null;
                         final String username = client.player != null ? client.player.getName().getString() : "Unknown";
 
                         // Heartbeat loop — tells backend this player is online (every 60s)

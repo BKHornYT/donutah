@@ -4,13 +4,13 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.donutsmp.donutah.network.ApiClient;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.GenericContainerScreenHandler;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.Component;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -26,21 +26,21 @@ public class AHScraper {
 
     public enum SortMode { LOWEST_PRICE, HIGHEST_PRICE, LAST_LISTED, RECENTLY_LISTED, UNKNOWN }
 
-    public static void onAHScreenOpen(GenericContainerScreenHandler handler) {
+    public static void onAHScreenOpen(ChestMenu handler) {
         if (!DonutAH.onTargetServer) return;
-        if (handler.getRows() != 6) return;
+        if (handler.getRowCount() != 6) return;
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
 
         // Log all non-empty slots for debugging
         DonutAH.LOGGER.info("[DonutAH] === SLOT SCAN ===");
         int nonEmpty = 0;
         for (int slot = 0; slot < 54; slot++) {
-            ItemStack stack = handler.getSlot(slot).getStack();
+            ItemStack stack = handler.getSlot(slot).getItem();
             if (!stack.isEmpty()) {
                 nonEmpty++;
                 DonutAH.LOGGER.info("[DonutAH] Slot {}: '{}' lore={}", slot,
-                        stack.getName().getString(), getLoreStrings(stack));
+                        stack.getHoverName().getString(), getLoreStrings(stack));
             }
         }
         DonutAH.LOGGER.info("[DonutAH] Non-empty: {}", nonEmpty);
@@ -96,12 +96,12 @@ public class AHScraper {
     // Returns the active search term if the SEARCH item's lore contains "(sometext)",
     // indicating a player/item filter is active (e.g. /ah bkhorn → "(bkhorn)").
     // Returns null if no active search is detected.
-    private static String detectActiveSearch(GenericContainerScreenHandler handler) {
+    private static String detectActiveSearch(ChestMenu handler) {
         // Scan all slots for any item whose lore contains (username) — don't rely on item name
         // matching since DonutSMP uses custom fonts/encoding we can't reliably normalize.
         // Player names are 3-16 chars, alphanumeric + underscore, no spaces.
         for (int slot = 0; slot < 54; slot++) {
-            ItemStack stack = handler.getSlot(slot).getStack();
+            ItemStack stack = handler.getSlot(slot).getItem();
             if (stack.isEmpty()) continue;
             for (String line : getLoreStrings(stack)) {
                 String clean = stripFormatting(line).trim();
@@ -122,11 +122,11 @@ public class AHScraper {
         return null;
     }
 
-    private static boolean detectFilterAll(GenericContainerScreenHandler handler) {
+    private static boolean detectFilterAll(ChestMenu handler) {
         for (int slot = 0; slot < 54; slot++) {
-            ItemStack stack = handler.getSlot(slot).getStack();
+            ItemStack stack = handler.getSlot(slot).getItem();
             if (stack.isEmpty()) continue;
-            String name = normalizeSmallCaps(stripFormatting(stack.getName().getString()).trim());
+            String name = normalizeSmallCaps(stripFormatting(stack.getHoverName().getString()).trim());
             if (!name.equals("filter")) continue;
 
             DonutAH.LOGGER.info("[DonutAH] Found FILTER item at slot {}", slot);
@@ -144,14 +144,14 @@ public class AHScraper {
 
     private static boolean parseFilterFromText(ItemStack stack) {
         try {
-            var lore = stack.get(DataComponentTypes.LORE);
+            var lore = stack.get(DataComponents.LORE);
             if (lore == null) return false;
-            for (Text line : lore.lines()) {
+            for (Component line : lore.lines()) {
                 boolean[] hasNonWhite = {false};
                 line.visit((style, content) -> {
                     var color = style.getColor();
                     if (color != null) {
-                        int rgb = color.getRgb() & 0xFFFFFF;
+                        int rgb = color.getValue() & 0xFFFFFF;
                         if (rgb != 0xFFFFFF && rgb != 0xAAAAAA && rgb != 0x555555
                                 && rgb != 0x000000 && rgb != 0xDDDDDD) {
                             hasNonWhite[0] = true;
@@ -187,12 +187,12 @@ public class AHScraper {
         return false;
     }
 
-    private static SortMode detectSortMode(GenericContainerScreenHandler handler) {
+    private static SortMode detectSortMode(ChestMenu handler) {
         // First pass: find the SORT item by name (flexible match handles custom fonts)
         for (int slot = 0; slot < 54; slot++) {
-            ItemStack stack = handler.getSlot(slot).getStack();
+            ItemStack stack = handler.getSlot(slot).getItem();
             if (stack.isEmpty()) continue;
-            String name = normalizeSmallCaps(stripFormatting(stack.getName().getString()).trim());
+            String name = normalizeSmallCaps(stripFormatting(stack.getHoverName().getString()).trim());
             if (name.equals("sort")) {
                 DonutAH.LOGGER.info("[DonutAH] Found SORT item at slot {}", slot);
                 SortMode mode = parseSortFromText(stack);
@@ -203,7 +203,7 @@ public class AHScraper {
         }
         // Second pass: scan every item's lore for a colored sort keyword
         for (int slot = 0; slot < 54; slot++) {
-            ItemStack stack = handler.getSlot(slot).getStack();
+            ItemStack stack = handler.getSlot(slot).getItem();
             if (stack.isEmpty()) continue;
             SortMode mode = parseSortFromText(stack);
             if (mode != SortMode.UNKNOWN) return mode;
@@ -214,14 +214,14 @@ public class AHScraper {
     // Directly inspects Text color runs — works with any RGB, not just the 16 standard colors
     private static SortMode parseSortFromText(ItemStack stack) {
         try {
-            var lore = stack.get(DataComponentTypes.LORE);
+            var lore = stack.get(DataComponents.LORE);
             if (lore == null) return SortMode.UNKNOWN;
-            for (Text line : lore.lines()) {
+            for (Component line : lore.lines()) {
                 boolean[] hasNonWhite = {false};
                 line.visit((style, content) -> {
                     var color = style.getColor();
                     if (color != null) {
-                        int rgb = color.getRgb() & 0xFFFFFF;
+                        int rgb = color.getValue() & 0xFFFFFF;
                         // Anything that isn't white or gray shades is "active" color
                         if (rgb != 0xFFFFFF && rgb != 0xAAAAAA && rgb != 0x555555
                                 && rgb != 0x000000 && rgb != 0xDDDDDD) {
@@ -261,11 +261,11 @@ public class AHScraper {
         return SortMode.UNKNOWN;
     }
 
-    private static void scanAndSubmit(GenericContainerScreenHandler handler, SortMode mode) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private static void scanAndSubmit(ChestMenu handler, SortMode mode) {
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null) return;
 
-        String scannerUUID = client.player.getUuidAsString();
+        String scannerUUID = client.player.getStringUUID();
         long timestamp = System.currentTimeMillis();
 
         // Track items seen this scan — only take the FIRST (cheapest) occurrence of each item name
@@ -275,9 +275,9 @@ public class AHScraper {
         Map<String, DonutAH.CachedListing> cacheUpdate = new HashMap<>();
 
         for (int slot = 0; slot < 54; slot++) {
-            ItemStack stack = handler.getSlot(slot).getStack();
+            ItemStack stack = handler.getSlot(slot).getItem();
             if (stack.isEmpty()) continue;
-            String itemName = stack.getName().getString();
+            String itemName = stack.getHoverName().getString();
             if (isControlItem(itemName)) continue;
 
             List<String> lore = getLoreStrings(stack);
@@ -442,9 +442,9 @@ public class AHScraper {
     public static List<String> getLoreStrings(ItemStack stack) {
         List<String> result = new ArrayList<>();
         try {
-            var lore = stack.get(DataComponentTypes.LORE);
+            var lore = stack.get(DataComponents.LORE);
             if (lore == null) return result;
-            for (Text line : lore.lines()) {
+            for (Component line : lore.lines()) {
                 result.add(toSectionCodedString(line));
             }
         } catch (Throwable e) {
@@ -455,12 +455,12 @@ public class AHScraper {
 
     // Reconstruct a §-coded string from a Text object's style tree,
     // so that colour-based detection (e.g. §a = active sort mode) keeps working.
-    private static String toSectionCodedString(Text text) {
+    private static String toSectionCodedString(Component text) {
         StringBuilder sb = new StringBuilder();
         text.visit((style, content) -> {
             var color = style.getColor();
             if (color != null) {
-                String code = rgbToSectionCode(color.getRgb());
+                String code = rgbToSectionCode(color.getValue());
                 if (code != null) sb.append(code);
             }
             sb.append(content);
@@ -547,13 +547,13 @@ public class AHScraper {
         List<String> result = new ArrayList<>();
         try {
             // 1. Regular enchanted items use ENCHANTMENTS component
-            ItemEnchantmentsComponent enchComp = stack.get(DataComponentTypes.ENCHANTMENTS);
+            ItemEnchantments enchComp = stack.get(DataComponents.ENCHANTMENTS);
             // 2. Real enchanted books in inventory use STORED_ENCHANTMENTS component
             if (enchComp == null || enchComp.isEmpty())
-                enchComp = stack.get(DataComponentTypes.STORED_ENCHANTMENTS);
+                enchComp = stack.get(DataComponents.STORED_ENCHANTMENTS);
 
             if (enchComp != null && !enchComp.isEmpty()) {
-                for (var enchEntry : enchComp.getEnchantments()) {
+                for (var enchEntry : enchComp.keySet()) {
                     String name = enchEntry.value().description().getString();
                     int level = enchComp.getLevel(enchEntry);
                     result.add(level == 1 ? name : name + " " + toRoman(level));
