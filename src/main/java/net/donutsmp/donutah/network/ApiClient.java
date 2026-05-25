@@ -68,10 +68,9 @@ public class ApiClient {
             if (net.donutsmp.donutah.DonutAHConfig.devForceServer == net.donutsmp.donutah.DonutAHConfig.ForceServer.VPS)
                 return BACKUP_BASE;
             if (isReachable(LOCAL_BASE, LAN_TIMEOUT)) return LOCAL_BASE;
+            if (isReachable(PRIMARY_BASE, HEALTH_TIMEOUT)) return PRIMARY_BASE;
         }
-        if (isReachable(PRIMARY_BASE, HEALTH_TIMEOUT)) return PRIMARY_BASE;
-        if (isReachable(BACKUP_BASE,  HEALTH_TIMEOUT)) return BACKUP_BASE;
-        return PRIMARY_BASE;
+        return BACKUP_BASE;
     }
 
     // ── GET helpers ────────────────────────────────────────────────────────
@@ -97,9 +96,11 @@ public class ApiClient {
         if (BuildConstants.STAGING) {
             for (String s : new String[]{STAGING_LOCAL_BASE, STAGING_PRIMARY_BASE, STAGING_BACKUP_BASE})
                 if (!servers.contains(s)) servers.add(s);
-        } else {
+        } else if (BuildConstants.DEV) {
             for (String s : new String[]{PRIMARY_BASE, BACKUP_BASE})
                 if (!servers.contains(s)) servers.add(s);
+        } else {
+            if (!servers.contains(BACKUP_BASE)) servers.add(BACKUP_BASE);
         }
 
         IOException lastErr = null;
@@ -287,7 +288,9 @@ public class ApiClient {
         servers.add(DonutAH.API_BASE);
         for (String s : BuildConstants.STAGING
                 ? new String[]{STAGING_LOCAL_BASE, STAGING_PRIMARY_BASE, STAGING_BACKUP_BASE}
-                : new String[]{PRIMARY_BASE, BACKUP_BASE})
+                : BuildConstants.DEV
+                    ? new String[]{PRIMARY_BASE, BACKUP_BASE}
+                    : new String[]{BACKUP_BASE})
             if (!servers.contains(s)) servers.add(s);
         for (String server : servers) {
             try {
