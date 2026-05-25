@@ -14,7 +14,8 @@ import java.time.format.DateTimeFormatter;
  */
 public class DebugWebhook {
 
-    private static final String WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE";
+    private static final String WEBHOOK_URL =
+        "YOUR_DISCORD_WEBHOOK_URL_HERE";
     private static final DateTimeFormatter TS_FMT =
         DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC);
 

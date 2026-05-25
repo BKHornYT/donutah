@@ -20,7 +20,8 @@ public class ApiClient {
     private static final int TIMEOUT = 8000;
     private static final int HEALTH_TIMEOUT = 3000;
     private static final int LAN_TIMEOUT = 500;
-    private static final String API_KEY = "YOUR_API_KEY_HERE";
+    private static final String API_KEY =
+        "YOUR_API_KEY_HERE";
 
     public static final String LOCAL_BASE   = "http://YOUR_LAN_IP:3000/api";
     public static final String PRIMARY_BASE = "http://YOUR_HOME_SERVER_IP:3000/api";
@@ -57,16 +58,9 @@ public class ApiClient {
      */
     public static String selectBestServer() {
         if (BuildConstants.STAGING) {
-            if (BuildConstants.DEV) {
-                if (net.donutsmp.donutah.DonutAHConfig.devForceServer == net.donutsmp.donutah.DonutAHConfig.ForceServer.HOME)
-                    return STAGING_PRIMARY_BASE;
-                if (net.donutsmp.donutah.DonutAHConfig.devForceServer == net.donutsmp.donutah.DonutAHConfig.ForceServer.VPS)
-                    return STAGING_BACKUP_BASE;
-            }
             if (isReachable(STAGING_LOCAL_BASE, LAN_TIMEOUT)) return STAGING_LOCAL_BASE;
             if (isReachable(STAGING_PRIMARY_BASE, HEALTH_TIMEOUT)) return STAGING_PRIMARY_BASE;
-            if (isReachable(STAGING_BACKUP_BASE,  HEALTH_TIMEOUT)) return STAGING_BACKUP_BASE;
-            return STAGING_PRIMARY_BASE;
+            return STAGING_BACKUP_BASE;
         }
         if (BuildConstants.DEV) {
             if (net.donutsmp.donutah.DonutAHConfig.devForceServer == net.donutsmp.donutah.DonutAHConfig.ForceServer.HOME)

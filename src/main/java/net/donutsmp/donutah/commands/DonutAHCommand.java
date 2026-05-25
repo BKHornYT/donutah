@@ -456,7 +456,7 @@ public class DonutAHCommand {
                     " §8[§f5§8] §e/donutah top §7— flip list shows (may say no data if DB empty)\n" +
                     " §8[§f6§8] §e/donutah settings §7— config screen opens (check Trend/Volume/Inv key)\n" +
                     " §8[§f7§8] §e/donutah reload §7— cache clears & resyncs (shows shop prices count)\n" +
-                    " §8[§f8§8] §eDashboard §7— http://YOUR_LAN_IP:3002\n" +
+                    " §8[§f8§8] §eDashboard §7— http://YOUR_STAGING_DASHBOARD_URL\n" +
                     " §8[§f9§8] §eShop price tooltip §7— muted item with static price shows §fShop: $X\n" +
                     " §8[§f10§8] §eInventory value key §7— press V in inventory → total shows in chat\n" +
                     " §8[§f11§8] §eL-key price editor §7— hover item, press L → Shop Price section visible\n" +
