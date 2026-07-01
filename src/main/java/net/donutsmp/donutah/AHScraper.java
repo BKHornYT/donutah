@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 public class AHScraper {
 
     private static final Pattern PRICE_PATTERN =
-            Pattern.compile("\\$([\\d,]+(?:\\.\\d+)?)(K|M|B)?", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\$\\s*([\\d,]+(?:\\.\\d+)?)(K|M|B|T|Q)?", Pattern.CASE_INSENSITIVE);
     private static final Pattern SEARCH_PAREN =
             Pattern.compile("\\(([^)]+)\\)");
     private static final Gson GSON = new Gson();
@@ -49,6 +49,23 @@ public class AHScraper {
             DonutAH.LOGGER.warn("[DonutAH] All slots empty — data not loaded yet");
             if (BuildConstants.STAGING) {
                 DebugWebhook.send("⚠️ AH screen: all 54 slots empty — data not loaded yet");
+            }
+            return;
+        }
+
+        // Backstop against filtered/own-listings views: a real AH page 1 always has a
+        // "Next Page" button; sparse search-result pages (e.g. own listings) don't.
+        boolean hasNextPage = false;
+        for (int slot = 0; slot < 54; slot++) {
+            ItemStack stack = handler.getSlot(slot).getItem();
+            if (stack.isEmpty()) continue;
+            String n = normalizeSmallCaps(stripFormatting(stack.getHoverName().getString())).trim();
+            if (n.equals("next page")) { hasNextPage = true; break; }
+        }
+        if (!hasNextPage) {
+            DonutAH.LOGGER.info("[DonutAH] Skipping — no Next Page button (filtered/search view, not real page 1)");
+            if (BuildConstants.STAGING) {
+                DebugWebhook.send("⏭️ Scan skipped: no Next Page button — filtered/search view");
             }
             return;
         }
@@ -133,7 +150,29 @@ public class AHScraper {
             // Primary: same Text-API color inspection as parseSortFromText
             if (parseFilterFromText(stack)) return true;
             // Fallback: §-code method, same as parseSortLore
-            return parseFilterLore(getLoreStrings(stack));
+            if (parseFilterLore(getLoreStrings(stack))) return true;
+
+            // New AH format: Filter item controls sort order only (no category filter).
+            // If its lore contains sort-mode keywords, there is no category filter active
+            // and the AH is showing all items — treat as "All".
+            List<String> lore = getLoreStrings(stack);
+            for (String line : lore) {
+                String clean = stripFormatting(line).toLowerCase().replaceAll("[^a-z]", "");
+                if (clean.contains("lowestprice") || clean.contains("highestprice")
+                        || clean.contains("recentlylisted") || clean.contains("lastlisted")) {
+                    DonutAH.LOGGER.info("[DonutAH] Filter item has sort-only lore (new AH format) — treating as ALL");
+                    if (BuildConstants.STAGING) {
+                        DebugWebhook.send("ℹ️ Filter item has sort-only lore (new AH format) — treating as ALL");
+                    }
+                    return true;
+                }
+            }
+
+            DonutAH.LOGGER.warn("[DonutAH] FILTER item found but state unknown — lore: {}", lore);
+            if (BuildConstants.STAGING) {
+                DebugWebhook.send("⚠️ Scan skipped: FILTER item state unknown (lore: `" + lore + "`)");
+            }
+            return false;
         }
         DonutAH.LOGGER.warn("[DonutAH] FILTER item not found — skipping scan");
         if (BuildConstants.STAGING) {
@@ -188,7 +227,7 @@ public class AHScraper {
     }
 
     private static SortMode detectSortMode(ChestMenu handler) {
-        // First pass: find the SORT item by name (flexible match handles custom fonts)
+        // First pass: find SORT or FILTER item by name
         for (int slot = 0; slot < 54; slot++) {
             ItemStack stack = handler.getSlot(slot).getItem();
             if (stack.isEmpty()) continue;
@@ -197,8 +236,16 @@ public class AHScraper {
                 DonutAH.LOGGER.info("[DonutAH] Found SORT item at slot {}", slot);
                 SortMode mode = parseSortFromText(stack);
                 if (mode != SortMode.UNKNOWN) return mode;
-                // fallback to §-code method
-                return parseSortLore(getLoreStrings(stack));
+                mode = parseSortLore(getLoreStrings(stack));
+                if (mode != SortMode.UNKNOWN) return mode;
+                // Don't early-return UNKNOWN — fall through to second pass
+            } else if (name.equals("filter")) {
+                // New AH format: Filter item holds sort options; active = white, inactive = gray
+                DonutAH.LOGGER.info("[DonutAH] Found FILTER item at slot {} (new AH format)", slot);
+                SortMode mode = parseSortFromFilterLore(stack);
+                if (mode != SortMode.UNKNOWN) return mode;
+                mode = parseSortLore(getLoreStrings(stack));
+                if (mode != SortMode.UNKNOWN) return mode;
             }
         }
         // Second pass: scan every item's lore for a colored sort keyword
@@ -248,6 +295,43 @@ public class AHScraper {
         return SortMode.UNKNOWN;
     }
 
+    // Like parseSortFromText but treats WHITE as "active" — new vanilla AH UI uses
+    // white for the selected sort option and gray for inactive ones.
+    private static SortMode parseSortFromFilterLore(ItemStack stack) {
+        try {
+            var lore = stack.get(DataComponents.LORE);
+            if (lore == null) return SortMode.UNKNOWN;
+            for (Component line : lore.lines()) {
+                boolean[] hasNonGray = {false};
+                line.visit((style, content) -> {
+                    var color = style.getColor();
+                    if (color != null) {
+                        int rgb = color.getValue() & 0xFFFFFF;
+                        // Gray shades and black = inactive; everything else (incl. white) = active
+                        if (rgb != 0xAAAAAA && rgb != 0x555555 && rgb != 0x000000 && rgb != 0xDDDDDD) {
+                            hasNonGray[0] = true;
+                        }
+                    }
+                    return Optional.empty();
+                }, Style.EMPTY);
+                if (hasNonGray[0]) {
+                    String text = line.getString().toLowerCase().trim();
+                    DonutAH.LOGGER.info("[DonutAH] Filter lore non-gray line: '{}'", text);
+                    if (text.contains("lowest price"))    return SortMode.LOWEST_PRICE;
+                    if (text.contains("highest price"))   return SortMode.HIGHEST_PRICE;
+                    if (text.contains("last listed"))     return SortMode.LAST_LISTED;
+                    if (text.contains("recently listed")) return SortMode.RECENTLY_LISTED;
+                }
+            }
+        } catch (Throwable e) {
+            DonutAH.LOGGER.warn("[DonutAH] parseSortFromFilterLore: {}", e.getMessage());
+            if (BuildConstants.STAGING) {
+                DebugWebhook.send("❌ parseSortFromFilterLore exception: `" + e.getMessage() + "`");
+            }
+        }
+        return SortMode.UNKNOWN;
+    }
+
     private static SortMode parseSortLore(List<String> lore) {
         for (String line : lore) {
             if (line.contains("§a") || line.contains("§2") || line.contains("§b")) {
@@ -278,7 +362,7 @@ public class AHScraper {
             ItemStack stack = handler.getSlot(slot).getItem();
             if (stack.isEmpty()) continue;
             String itemName = stack.getHoverName().getString();
-            if (isControlItem(itemName)) continue;
+            if (isServerUiStack(stack)) continue;
 
             List<String> lore = getLoreStrings(stack);
             ParsedListing listing = parseListing(itemName, lore, stack.getCount());
@@ -435,6 +519,8 @@ public class AHScraper {
             case "K": value *= 1_000; break;
             case "M": value *= 1_000_000; break;
             case "B": value *= 1_000_000_000; break;
+            case "T": value *= 1_000_000_000_000L; break;
+            case "Q": value *= 1_000_000_000_000_000L; break;
         }
         return value;
     }
@@ -535,10 +621,30 @@ public class AHScraper {
     }
 
     private static boolean isControlItem(String name) {
-        String l = name.toLowerCase();
+        String l = normalizeSmallCaps(stripFormatting(name)).trim();
         return l.equals("sort") || l.equals("filter") || l.equals("search")
             || l.equals("next") || l.equals("previous") || l.equals("back")
-            || l.equals("close") || l.equals("next page") || l.equals("previous page");
+            || l.equals("close") || l.equals("next page") || l.equals("previous page")
+            || l.equals("your items") || l.equals("shard shop") || l.equals("auction")
+            || l.equals("quick buy") || l.equals("quick sell") || l.equals("edit")
+            || l.equals("empty");
+    }
+
+    // True for any server UI/control button: known control names, or lore that is a
+    // "Click to ..." instruction (all new-AH control items carry one, real listings never do).
+    // Used by the scanner AND by TooltipHandler so Filter/Next Page/Quick Buy etc.
+    // never get a DonutAH price line.
+    public static boolean isServerUiStack(ItemStack stack) {
+        try {
+            if (isControlItem(stack.getHoverName().getString())) return true;
+            for (String line : getLoreStrings(stack)) {
+                String clean = normalizeSmallCaps(stripFormatting(line)).trim();
+                if (clean.startsWith("click to")) return true;
+            }
+        } catch (Throwable e) {
+            DonutAH.LOGGER.warn("[DonutAH] isServerUiStack: {}", e.getMessage());
+        }
+        return false;
     }
 
     // Reads real enchantments from the item's ENCHANTMENTS data component.
@@ -574,22 +680,25 @@ public class AHScraper {
         return result;
     }
 
-    // Extracts enchantment names from AH lore lines that appear before the "Price:" line.
-    // Returns empty if there is no "Price:" line (i.e. the item is not an AH slot item).
+    // Extracts enchantment names from AH lore lines that appear before the price line.
+    // Returns empty if no price line is found (i.e. the item is not an AH slot item).
     private static List<String> getEnchantmentsFromAHLore(ItemStack stack) {
         List<String> enchants = new ArrayList<>();
         List<String> lore = getLoreStrings(stack);
 
-        // Confirm this is an AH item by checking that "Price:" appears somewhere in lore
-        boolean hasPriceLine = lore.stream()
-                .anyMatch(l -> stripFormatting(l).trim().startsWith("Price:"));
+        // Confirm this is an AH item: old format has "Price:", new format has a bare "$ xxx" line
+        boolean hasPriceLine = lore.stream().anyMatch(l -> {
+            String clean = stripFormatting(l).trim();
+            return clean.startsWith("Price:") || (clean.startsWith("$") && parsePrice(clean) >= 0);
+        });
         if (!hasPriceLine) return enchants;
 
-        // Collect every lore line before "Price:" — those are the enchantment names
+        // Collect every lore line before the price line — those are the enchantment names
         for (String line : lore) {
             String clean = stripFormatting(line).trim();
             if (clean.startsWith("Price:") || clean.startsWith("Seller:")
-                    || clean.startsWith("Worth:") || clean.startsWith("Time Left:")) break;
+                    || clean.startsWith("Worth:") || clean.startsWith("Time Left:")
+                    || (clean.startsWith("$") && parsePrice(clean) >= 0)) break;
             if (!clean.isEmpty()) enchants.add(clean);
         }
         return enchants;

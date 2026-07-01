@@ -30,6 +30,11 @@ public class TooltipHandler {
             lastHoveredItemName = stack.getHoverName().getString().trim();
             if (!DonutAHConfig.tooltipEnabled) return;
 
+            // Never add DonutAH lines to server UI buttons (Filter, Next Page, Quick Buy,
+            // Search, Edit, "Empty" placeholders, ...) — identified by control name or
+            // "Click to ..." instruction lore.
+            if (AHScraper.isServerUiStack(stack)) return;
+
             // Skip if the current screen is a muted GUI (e.g. "Team", "Settings")
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
             if (mc.screen != null) {
@@ -69,9 +74,14 @@ public class TooltipHandler {
                 }
             }
 
+            // Normalize both ways so small-caps DB names match new ASCII AH item names
+            String hoveredLower = lastHoveredItemName.toLowerCase();
+            String hoveredNorm  = AHScraper.normalizeSmallCaps(hoveredLower);
+
             // Muted items: show static price if set, then label, then return
-            if (DonutAH.mutedItems.contains(lastHoveredItemName.toLowerCase())) {
-                Double staticPrice = DonutAH.staticPrices.get(lastHoveredItemName.toLowerCase());
+            if (DonutAH.mutedItems.contains(hoveredLower) || DonutAH.mutedItems.contains(hoveredNorm)) {
+                Double staticPrice = DonutAH.staticPrices.get(hoveredLower);
+                if (staticPrice == null) staticPrice = DonutAH.staticPrices.get(hoveredNorm);
                 if (staticPrice != null) {
                     String pfx = DonutAHConfig.getFormattedPrefix();
                     String col = DonutAHConfig.getColorCode();
@@ -83,7 +93,8 @@ public class TooltipHandler {
                     }
                 }
                 if (DonutAHConfig.devShowLabels) {
-                    String label = DonutAH.itemLabels.get(lastHoveredItemName.toLowerCase());
+                    String label = DonutAH.itemLabels.get(hoveredLower);
+                    if (label == null) label = DonutAH.itemLabels.get(hoveredNorm);
                     if (label != null) {
                         if (staticPrice == null && DonutAHConfig.tooltipSpacer) lines.add(Component.literal(""));
                         lines.add(Component.literal(DonutAHConfig.getFormattedPrefix() + " §e★ " + label));
@@ -124,6 +135,7 @@ public class TooltipHandler {
             // Show custom label if set (server-wide, set via /donutah label)
             if (DonutAHConfig.devShowLabels) {
                 String label = DonutAH.itemLabels.get(itemName.toLowerCase());
+                if (label == null) label = DonutAH.itemLabels.get(AHScraper.normalizeSmallCaps(itemName.toLowerCase()));
                 if (label != null) {
                     lines.add(Component.literal(DonutAHConfig.getFormattedPrefix() + " §e★ " + label));
                 }
@@ -275,6 +287,7 @@ public class TooltipHandler {
 
     public static String formatPrice(double p) {
         if (!DonutAHConfig.compactNumbers) return String.format("%.0f", p);
+        if (p >= 1_000_000_000_000L) return String.format("%.2fT", p / 1_000_000_000_000L);
         if (p >= 1_000_000_000) return String.format("%.2fB", p / 1_000_000_000);
         if (p >= 1_000_000)     return String.format("%.2fM", p / 1_000_000);
         if (p >= 1_000)         return String.format("%.1fK", p / 1_000);

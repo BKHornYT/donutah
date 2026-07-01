@@ -25,13 +25,43 @@ public abstract class ScreenHandlerMixin extends Screen {
     @Inject(method = "init", at = @At("RETURN"))
     private void onScreenInit(CallbackInfo ci) {
         if (!DonutAH.onTargetServer) return;
+
+        String normTitle = AHScraper.normalizeSmallCaps(
+                AHScraper.stripFormatting(this.getTitle().getString())).trim();
+        DonutAH.LOGGER.info("[DonutAH] Screen opened: '{}' (normalized: '{}')",
+                this.getTitle().getString(), normTitle);
+
+        // Search-GUI flow (Search button): the next Auction screen is search results —
+        // suppress scans until the AH closes, same as the /ah <arg> command path.
+        if (normTitle.contains("search")) {
+            DonutAH.searchActive = true;
+            DonutAH.searchActiveSince = System.currentTimeMillis();
+            DonutAH.LOGGER.info("[DonutAH] Search GUI opened — AH scans suppressed until closed");
+            if (BuildConstants.STAGING) {
+                net.donutsmp.donutah.DebugWebhook.send("🔎 Search GUI opened — scans suppressed until AH closed");
+            }
+        }
+
         AbstractContainerMenu handler = getMenu();
         if (!(handler instanceof ChestMenu containerHandler)) return;
         if (containerHandler.getRowCount() != 6) return;
 
+        // Only scan the Auction screen itself — Quick Buy / Your Items / Shard Shop etc.
+        // are also 6-row containers but must never be scanned as market data.
+        if (!normTitle.contains("auction")) return;
+
         // Only scan page 1 — skip page 2, 3, etc.
-        String titleLower = this.getTitle().getString().toLowerCase();
-        if (titleLower.contains("page") && !titleLower.contains("page 1")) return;
+        if (normTitle.contains("page") && !normTitle.contains("page 1")) return;
+
+        // Player-initiated search active (/ah <arg> or Search GUI) — these results are
+        // filtered/own listings, never market page 1. New AH format has no in-GUI marker.
+        if (DonutAH.searchActive) {
+            DonutAH.LOGGER.info("[DonutAH] Skipping scan — search active (own/filtered results)");
+            if (BuildConstants.STAGING) {
+                net.donutsmp.donutah.DebugWebhook.send("⏭️ Scan skipped: player search active (/ah <arg> or Search GUI)");
+            }
+            return;
+        }
 
         DonutAH.LOGGER.info("[DonutAH] 6-row screen '{}' — waiting for slot data...", this.getTitle().getString());
         if (BuildConstants.STAGING) {

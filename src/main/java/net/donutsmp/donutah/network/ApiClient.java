@@ -19,17 +19,12 @@ public class ApiClient {
     private static final Gson GSON = new Gson();
     private static final int TIMEOUT = 8000;
     private static final int HEALTH_TIMEOUT = 3000;
-    private static final int LAN_TIMEOUT = 500;
     private static final String API_KEY =
         "YOUR_API_KEY_HERE";
 
-    public static final String LOCAL_BASE   = "http://YOUR_LAN_IP:3000/api";
-    public static final String PRIMARY_BASE = "http://YOUR_HOME_SERVER_IP:3000/api";
-    public static final String BACKUP_BASE  = "http://YOUR_VPS_IP:3001/api";
-
-    // Staging servers — used when BuildConstants.STAGING = true
-    public static final String STAGING_LOCAL_BASE   = "http://YOUR_LAN_IP:3002/api";
-    public static final String STAGING_PRIMARY_BASE = "http://YOUR_HOME_SERVER_IP:3002/api";
+    // VPS is the only server — the home server (YOUR_LAN_IP / YOUR_HOME_SERVER_IP) was
+    // decommissioned. All build types connect straight to the VPS.
+    public static final String BACKUP_BASE          = "http://YOUR_VPS_IP:3001/api";
     public static final String STAGING_BACKUP_BASE  = "http://YOUR_VPS_IP:3003/api";
 
     /** Returns true if the given base URL responds HTTP 200 on /latest within the given timeout. */
@@ -51,26 +46,9 @@ public class ApiClient {
         return isReachable(baseUrl, HEALTH_TIMEOUT);
     }
 
-    /**
-     * Returns the best reachable server.
-     * In DEV builds, respects devForceServer config; tries LAN IP first (only works on home network).
-     * In release builds, goes straight to public primary then backup.
-     */
+    /** Returns the server for this build type — VPS production or VPS staging. */
     public static String selectBestServer() {
-        if (BuildConstants.STAGING) {
-            if (isReachable(STAGING_LOCAL_BASE, LAN_TIMEOUT)) return STAGING_LOCAL_BASE;
-            if (isReachable(STAGING_PRIMARY_BASE, HEALTH_TIMEOUT)) return STAGING_PRIMARY_BASE;
-            return STAGING_BACKUP_BASE;
-        }
-        if (BuildConstants.DEV) {
-            if (net.donutsmp.donutah.DonutAHConfig.devForceServer == net.donutsmp.donutah.DonutAHConfig.ForceServer.HOME)
-                return PRIMARY_BASE;
-            if (net.donutsmp.donutah.DonutAHConfig.devForceServer == net.donutsmp.donutah.DonutAHConfig.ForceServer.VPS)
-                return BACKUP_BASE;
-            if (isReachable(LOCAL_BASE, LAN_TIMEOUT)) return LOCAL_BASE;
-            if (isReachable(PRIMARY_BASE, HEALTH_TIMEOUT)) return PRIMARY_BASE;
-        }
-        return BACKUP_BASE;
+        return BuildConstants.STAGING ? STAGING_BACKUP_BASE : BACKUP_BASE;
     }
 
     // ── GET helpers ────────────────────────────────────────────────────────
@@ -90,18 +68,11 @@ public class ApiClient {
      * On connection failure, switches to the best available server and retries once.
      */
     private static String getJson(String path) throws Exception {
-        // Build ordered list of servers to try, starting from current API_BASE, then all others
+        // VPS only — retry via the canonical base in case API_BASE is stale
         List<String> servers = new java.util.ArrayList<>();
         servers.add(DonutAH.API_BASE);
-        if (BuildConstants.STAGING) {
-            for (String s : new String[]{STAGING_LOCAL_BASE, STAGING_PRIMARY_BASE, STAGING_BACKUP_BASE})
-                if (!servers.contains(s)) servers.add(s);
-        } else if (BuildConstants.DEV) {
-            for (String s : new String[]{PRIMARY_BASE, BACKUP_BASE})
-                if (!servers.contains(s)) servers.add(s);
-        } else {
-            if (!servers.contains(BACKUP_BASE)) servers.add(BACKUP_BASE);
-        }
+        String vps = BuildConstants.STAGING ? STAGING_BACKUP_BASE : BACKUP_BASE;
+        if (!servers.contains(vps)) servers.add(vps);
 
         IOException lastErr = null;
         for (String server : servers) {
@@ -283,15 +254,11 @@ public class ApiClient {
     public static void postHeartbeat(String uuid, String username) {
         String safe = username.replace("\\", "\\\\").replace("\"", "\\\"");
         String body = "{\"uuid\":\"" + uuid + "\",\"username\":\"" + safe + "\"}";
-        // Try all servers in order — same cascade as getJson
+        // VPS only — same fallback shape as getJson
         List<String> servers = new java.util.ArrayList<>();
         servers.add(DonutAH.API_BASE);
-        for (String s : BuildConstants.STAGING
-                ? new String[]{STAGING_LOCAL_BASE, STAGING_PRIMARY_BASE, STAGING_BACKUP_BASE}
-                : BuildConstants.DEV
-                    ? new String[]{PRIMARY_BASE, BACKUP_BASE}
-                    : new String[]{BACKUP_BASE})
-            if (!servers.contains(s)) servers.add(s);
+        String vps = BuildConstants.STAGING ? STAGING_BACKUP_BASE : BACKUP_BASE;
+        if (!servers.contains(vps)) servers.add(vps);
         for (String server : servers) {
             try {
                 HttpURLConnection conn = openConn(server + "/heartbeat", "POST");

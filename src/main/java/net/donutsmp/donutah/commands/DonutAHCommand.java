@@ -410,29 +410,27 @@ public class DonutAHCommand {
         source.sendFeedback(Component.literal(" §7Running auto checks..."));
 
         Thread.ofVirtual().start(() -> {
-            String localBase = ApiClient.STAGING_LOCAL_BASE;
-            String vpsBase   = ApiClient.STAGING_BACKUP_BASE;
+            String vpsBase = ApiClient.STAGING_BACKUP_BASE;
 
-            boolean homeOk = ApiClient.isReachable(localBase, 2000);
-            boolean vpsOk  = ApiClient.isReachable(vpsBase,  3000);
+            boolean vpsOk = ApiClient.isReachable(vpsBase, 3000);
 
             // GET /api/latest
-            String latestBody = doGetRaw(localBase + "/latest", 5000);
+            String latestBody = doGetRaw(vpsBase + "/latest", 5000);
             boolean latestOk  = latestBody != null;
             int latestCount   = latestOk ? (int) latestBody.chars().filter(c -> c == '{').count() : 0;
 
             // GET /api/dashboard
-            boolean dashOk = doGetRaw(localBase + "/dashboard", 5000) != null;
+            boolean dashOk = doGetRaw(vpsBase + "/dashboard", 5000) != null;
 
             // GET /api/static-prices
-            String staticBody  = doGetRaw(localBase + "/static-prices", 5000);
+            String staticBody  = doGetRaw(vpsBase + "/static-prices", 5000);
             boolean staticOk   = staticBody != null;
             int staticCount    = staticOk ? (int) staticBody.chars().filter(c -> c == '{').count() : 0;
 
             // GET /api/top
-            boolean topOk = doGetRaw(localBase + "/top", 5000) != null;
+            boolean topOk = doGetRaw(vpsBase + "/top", 5000) != null;
 
-            final boolean fHome = homeOk, fVps = vpsOk, fLatest = latestOk, fDash = dashOk, fStatic = staticOk, fTop = topOk;
+            final boolean fVps = vpsOk, fLatest = latestOk, fDash = dashOk, fStatic = staticOk, fTop = topOk;
             final int fCount = latestCount, fSCount = staticCount;
 
             Minecraft.getInstance().execute(() -> {
@@ -440,8 +438,7 @@ public class DonutAHCommand {
                 String err = "§c✗";
                 source.sendFeedback(Component.literal(
                     " §7Auto checks:\n" +
-                    " §8┌ §fHome staging       " + (fHome   ? ok + " §7(YOUR_LAN_IP:3002)" : err + " §cUNREACHABLE") + "\n" +
-                    " §8│ §fVPS staging        " + (fVps    ? ok + " §7(YOUR_VPS_IP:3003)"   : err + " §cUNREACHABLE") + "\n" +
+                    " §8┌ §fVPS staging        " + (fVps    ? ok + " §7(YOUR_VPS_IP:3003)"   : err + " §cUNREACHABLE") + "\n" +
                     " §8│ §f/api/latest        " + (fLatest ? ok + " §7(" + fCount + " items)"  : err + " §cFAILED") + "\n" +
                     " §8│ §f/api/dashboard     " + (fDash   ? ok                               : err + " §cFAILED") + "\n" +
                     " §8│ §f/api/static-prices " + (fStatic ? ok + " §7(" + fSCount + " entries)" : err + " §cFAILED") + "\n" +
@@ -456,10 +453,12 @@ public class DonutAHCommand {
                     " §8[§f5§8] §e/donutah top §7— flip list shows (may say no data if DB empty)\n" +
                     " §8[§f6§8] §e/donutah settings §7— config screen opens (check Trend/Volume/Inv key)\n" +
                     " §8[§f7§8] §e/donutah reload §7— cache clears & resyncs (shows shop prices count)\n" +
-                    " §8[§f8§8] §eDashboard §7— http://YOUR_STAGING_DASHBOARD_URL\n" +
+                    " §8[§f8§8] §eDashboard §7— http://YOUR_VPS_IP:3003\n" +
                     " §8[§f9§8] §eShop price tooltip §7— muted item with static price shows §fShop: $X\n" +
                     " §8[§f10§8] §eInventory value key §7— press V in inventory → total shows in chat\n" +
                     " §8[§f11§8] §eL-key price editor §7— hover item, press L → Shop Price section visible\n" +
+                    " §8[§f12§8] §eControl buttons clean §7— hover Filter/Next Page/Quick Buy → NO DonutAH line\n" +
+                    " §8[§f13§8] §eQuick Buy not scanned §7— open Quick Buy screen → no scan fires (check log)\n" +
                     sep
                 ));
             });

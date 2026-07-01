@@ -23,7 +23,7 @@ public class DonutAH implements ClientModInitializer {
 
     public static final Logger LOGGER = LoggerFactory.getLogger("donutah");
     public static final String TARGET_SERVER_SUFFIX = "donutsmp.net";
-    public static volatile String API_BASE = BuildConstants.STAGING ? ApiClient.STAGING_PRIMARY_BASE : ApiClient.PRIMARY_BASE;
+    public static volatile String API_BASE = BuildConstants.STAGING ? ApiClient.STAGING_BACKUP_BASE : ApiClient.BACKUP_BASE;
     public static boolean onTargetServer = false;
 
     // Tooltip cache — pre-populated from /api/latest on join, used by TooltipHandler
@@ -40,6 +40,12 @@ public class DonutAH implements ClientModInitializer {
 
     // Session scan counter — incremented per item on successful POST (reset on disconnect)
     public static volatile int sessionScans = 0;
+
+    // Own-search protection: the new AH GUI carries NO search marker, so we track it
+    // client-side — set when the player sends "/ah <arg>" or opens the Search GUI;
+    // while active, AH scans are suppressed so own/filtered listings never enter the DB.
+    public static volatile boolean searchActive = false;
+    public static volatile long searchActiveSince = 0;
 
     // GUI names whose tooltips are suppressed (title contains match → no DonutAH tooltip)
     public static final Set<String> mutedGuis = ConcurrentHashMap.newKeySet();
@@ -69,7 +75,29 @@ public class DonutAH implements ClientModInitializer {
     public void onInitializeClient() {
         DonutAHConfig.load();
 
+        // Detect "/ah <arg>" (player or item search) — suppress scans until the AH closes.
+        // The new AH GUI is indistinguishable from the normal page 1, so this is the only
+        // reliable way to avoid scanning the player's own listings into market data.
+        net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents.COMMAND.register(command -> {
+            if (!onTargetServer) return;
+            String c = command.trim().toLowerCase();
+            if (c.equals("ah") || c.equals("auction") || c.equals("auctionhouse")) {
+                if (searchActive) LOGGER.info("[DonutAH] Plain /{} — scan suppression lifted", c);
+                searchActive = false;
+            } else if (c.startsWith("ah ") || c.startsWith("auction ") || c.startsWith("auctionhouse ")) {
+                searchActive = true;
+                searchActiveSince = System.currentTimeMillis();
+                LOGGER.info("[DonutAH] Search command '/{}' — AH scans suppressed until closed", c);
+                if (BuildConstants.STAGING) {
+                    DebugWebhook.send("🔎 `/" + c + "` detected — scans suppressed until AH closed");
+                }
+            }
+        });
+
         // Inventory value key — all builds
+        // NOTE: scan suppression (searchActive) is deliberately NOT lifted on GUI close —
+        // a close→reopen race let own listings get scanned. It only clears on a plain
+        // /ah command or disconnect. Fail-safe: prefer missing a scan over bad data.
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.getWindow() == null || client.player == null) return;
             if (!onTargetServer || client.screen == null) return;
@@ -267,6 +295,7 @@ public class DonutAH implements ClientModInitializer {
             }
             onTargetServer = false;
             sessionScans = 0;
+            searchActive = false;
             TooltipHandler.clearCache();
             listingCache.clear();
             scanCache.clear();
