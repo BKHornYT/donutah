@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
 }
 
-version = '1.0.63'
+version = '1.0.64'
 group = 'net.donutsmp'
 
 def gameVersion     = '26.1'

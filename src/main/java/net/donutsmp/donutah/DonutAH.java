@@ -42,8 +42,10 @@ public class DonutAH implements ClientModInitializer {
     public static volatile int sessionScans = 0;
 
     // Own-search protection: the new AH GUI carries NO search marker, so we track it
-    // client-side — set when the player sends "/ah <arg>" or opens the Search GUI;
-    // while active, AH scans are suppressed so own/filtered listings never enter the DB.
+    // client-side — set when the player sends "/ah <arg>" that looks like a player name,
+    // or opens the Search GUI; while active, AH scans are suppressed so own/filtered
+    // listings never enter the DB. Item searches (/ah diamond) are real market data and
+    // are exempt — see isItemSearch().
     public static volatile boolean searchActive = false;
     public static volatile long searchActiveSince = 0;
 
@@ -71,13 +73,30 @@ public class DonutAH implements ClientModInitializer {
         }
     }
 
+    // Usernames can't contain spaces, so a multi-word search term is always an item
+    // search; a single word counts only if it matches a known item id or display name
+    // (a player could share an item's name — accepted risk). Anything else is treated
+    // as a player-name search and suppressed (fail-safe: missed scans over bad data).
+    public static boolean isItemSearch(String term) {
+        if (term.isEmpty()) return false;
+        if (term.contains(" ")) return true;
+        for (net.minecraft.world.item.Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+            if (net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item).getPath().equals(term)
+                    || new net.minecraft.world.item.ItemStack(item).getHoverName().getString().equalsIgnoreCase(term)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public void onInitializeClient() {
         DonutAHConfig.load();
 
-        // Detect "/ah <arg>" (player or item search) — suppress scans until the AH closes.
-        // The new AH GUI is indistinguishable from the normal page 1, so this is the only
-        // reliable way to avoid scanning the player's own listings into market data.
+        // Detect "/ah <arg>" — the new AH GUI is indistinguishable from the normal page 1,
+        // so search handling is command-based. Item searches (/ah diamond) are legit market
+        // data and scan normally; player-name-shaped searches (/ah <name>) can show own
+        // listings, so they suppress scans until the AH closes.
         net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents.COMMAND.register(command -> {
             if (!onTargetServer) return;
             String c = command.trim().toLowerCase();
@@ -85,11 +104,21 @@ public class DonutAH implements ClientModInitializer {
                 if (searchActive) LOGGER.info("[DonutAH] Plain /{} — scan suppression lifted", c);
                 searchActive = false;
             } else if (c.startsWith("ah ") || c.startsWith("auction ") || c.startsWith("auctionhouse ")) {
-                searchActive = true;
-                searchActiveSince = System.currentTimeMillis();
-                LOGGER.info("[DonutAH] Search command '/{}' — AH scans suppressed until closed", c);
-                if (BuildConstants.STAGING) {
-                    DebugWebhook.send("🔎 `/" + c + "` detected — scans suppressed until AH closed");
+                String term = c.substring(c.indexOf(' ') + 1).trim();
+                if (isItemSearch(term)) {
+                    if (searchActive) LOGGER.info("[DonutAH] Item search — previous scan suppression lifted");
+                    searchActive = false;
+                    LOGGER.info("[DonutAH] Item search '/{}' — market data, scans allowed", c);
+                    if (BuildConstants.STAGING) {
+                        DebugWebhook.send("🔎 `/" + c + "` matched a known item — scans ALLOWED");
+                    }
+                } else {
+                    searchActive = true;
+                    searchActiveSince = System.currentTimeMillis();
+                    LOGGER.info("[DonutAH] Player-name search '/{}' — AH scans suppressed until closed", c);
+                    if (BuildConstants.STAGING) {
+                        DebugWebhook.send("🔎 `/" + c + "` is not a known item (player search?) — scans suppressed until AH closed");
+                    }
                 }
             }
         });

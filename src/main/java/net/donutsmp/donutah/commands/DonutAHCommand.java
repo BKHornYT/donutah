@@ -459,6 +459,8 @@ public class DonutAHCommand {
                     " §8[§f11§8] §eL-key price editor §7— hover item, press L → Shop Price section visible\n" +
                     " §8[§f12§8] §eControl buttons clean §7— hover Filter/Next Page/Quick Buy → NO DonutAH line\n" +
                     " §8[§f13§8] §eQuick Buy not scanned §7— open Quick Buy screen → no scan fires (check log)\n" +
+                    " §8[§f14§8] §eItem search scanned §7— §f/ah diamond§7 (lowest price) → scan fires\n" +
+                    " §8[§f15§8] §ePlayer search skipped §7— §f/ah <yourname>§7 → log shows scans suppressed\n" +
                     sep
                 ));
             });
